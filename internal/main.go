@@ -8,7 +8,7 @@ import (
 
 func main() {
 	r := gin.New()
-	r.PATCH("/users")
+	//r.PATCH("/users")
 
 	routes.AuthRoutes(r)
 	routes.UserRoutes(r)

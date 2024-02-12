@@ -31,5 +31,5 @@ func DBinstance() *mongo.Client {
 var client *mongo.Client = DBinstance()
 
 func OpenConnection(client *mongo.Client, collectionName string) *mongo.Collection {
-	return client.Database("").Collection(collectionName)
+	return client.Database("ContractFinder").Collection(collectionName)
 }
