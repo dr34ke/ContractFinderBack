@@ -17,8 +17,8 @@ func GenerateAllTokens(user models.User) (singedToken string, signedRefreshToken
 
 	claims := &SignedDetails{
 		Email:      user.Email,
-		First_name: user.First_name,
-		Last_name:  user.Last_name,
+		First_name: user.FirstName,
+		Last_name:  user.LastName,
 		Uid:        user.Id,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Local().Add(time.Hour * time.Duration(24)).Unix(),

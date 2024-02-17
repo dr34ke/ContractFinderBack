@@ -23,6 +23,7 @@ func Authenticate() gin.HandlerFunc {
 		}
 		c.Set("email", claims.Email)
 		c.Set("uuid", claims.Uid)
+
 		c.Next()
 	}
 }

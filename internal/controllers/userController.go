@@ -53,7 +53,7 @@ func SingUp() gin.HandlerFunc {
 		user.Id = guid.New().String()
 		token, refresh_token, _ := helper.GenerateAllTokens(user)
 		user.Token = token
-		user.Refresh_Token = refresh_token
+		user.RefreshToken = refresh_token
 		user.HashPassword()
 
 		result, err := userCollection.InsertOne(ctx, user)
@@ -63,9 +63,6 @@ func SingUp() gin.HandlerFunc {
 		}
 		c.JSON(http.StatusCreated, result)
 	}
-}
-func serverError(err error, c *gin.Context) {
-
 }
 
 func Login() gin.HandlerFunc {
@@ -94,7 +91,7 @@ func Login() gin.HandlerFunc {
 			return
 		}
 		foundUser.Token = token
-		foundUser.Refresh_Token = refreshToken
+		foundUser.RefreshToken = refreshToken
 		foundUser.TimeStamp.Login()
 		err = foundUser.UpdateTokens(ctx)
 
@@ -110,7 +107,67 @@ func Login() gin.HandlerFunc {
 
 func GetUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"ok": "ok"})
-		return
+		_, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		id, _ := c.Get("uuid")
+		c.JSON(http.StatusOK, gin.H{"ok": id})
+	}
+}
+
+func UpdateUserProfile() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		id, _ := c.Get("uuid")
+
+		var userProfile models.UserProfile
+		if err := c.BindJSON(&userProfile); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		filter := bson.M{"_id": id}
+		update := bson.M{
+			"$set": bson.M{
+				"userProfile": userProfile,
+			},
+		}
+		response, err := userCollection.UpdateOne(ctx, filter, update)
+
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"response": response})
+	}
+}
+
+func UpdateUserPreference() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		id, _ := c.Get("uuid")
+
+		var userPreference models.UserPreference
+		if err := c.BindJSON(&userPreference); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		filter := bson.M{"_id": id}
+		update := bson.M{
+			"$set": bson.M{
+				"userPreference": userPreference,
+			},
+		}
+		response, err := userCollection.UpdateOne(ctx, filter, update)
+
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"response": response})
 	}
 }
