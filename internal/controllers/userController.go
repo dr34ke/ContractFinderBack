@@ -11,6 +11,7 @@ import (
 
 	"github.com/beevik/guid"
 	"github.com/gin-gonic/gin"
+
 	"github.com/go-playground/validator/v10"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -24,12 +25,22 @@ func SingUp() gin.HandlerFunc {
 		var ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		var user models.User
 		defer cancel()
+
 		if err := c.BindJSON(&user); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		if validationErr := validate.Struct(user); validationErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"Validation error": validationErr.Error()})
+			errs := validationErr.(validator.ValidationErrors)
+			var response string
+			for _, element := range errs {
+				if element.Tag() == "min" {
+					response += element.Field() + " - za mało znaków, "
+				} else {
+					response += element.Field() + " - za dużo znaków, "
+				}
+			}
+			c.JSON(http.StatusBadRequest, gin.H{"error": response})
 			return
 		}
 
@@ -46,7 +57,7 @@ func SingUp() gin.HandlerFunc {
 		}
 
 		if countEmail > 0 || countPhone > 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Phone or email already exists!"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Telefon lub email już istnieje!"})
 			return
 		}
 		user.TimeStamp.Created()
@@ -77,12 +88,12 @@ func Login() gin.HandlerFunc {
 		}
 		err := userCollection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&foundUser)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "User not found"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nie znaleziono użytkownika"})
 			return
 		}
 		isPasswordCorrect := foundUser.CheckPasswordHash(user.Password)
 		if !isPasswordCorrect {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Wrong password"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Błędne hasło"})
 			return
 		}
 		token, refreshToken, _ := helper.GenerateAllTokens(foundUser)
