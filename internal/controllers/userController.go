@@ -60,7 +60,11 @@ func SingUp() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Telefon lub email już istnieje!"})
 			return
 		}
+
 		user.TimeStamp.Created()
+		user.UserPreference.TimeStamp.Created()
+		user.UserProfile.TimeStamp.Created()
+
 		user.Id = guid.New().String()
 		token, refresh_token, _ := helper.GenerateAllTokens(user)
 		user.Token = token
@@ -116,7 +120,23 @@ func Login() gin.HandlerFunc {
 
 }
 
-func GetUser() gin.HandlerFunc {
+func GetUserProfile() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		id := c.Param("id")
+
+		var foundUser models.User
+		err := userCollection.FindOne(ctx, bson.M{"_id": id}).Decode(&foundUser)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nie znaleziono użytkownika"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"ok": foundUser.UserProfile})
+	}
+}
+func GetUserPreference() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		_, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
@@ -136,6 +156,7 @@ func UpdateUserProfile() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		userProfile.TimeStamp.Updated()
 
 		filter := bson.M{"_id": id}
 		update := bson.M{

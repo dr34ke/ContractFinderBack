@@ -5,15 +5,13 @@ import (
 )
 
 type TimeStamp struct {
-	Created_at time.Time
-	Updated_at time.Time
-	Last_login time.Time
+	Created_at time.Time `json:"createdAt,omitempty" bson:"createdAt,omitempty"`
+	Updated_at time.Time `json:"updatedAt,omitempty" bson:"updatedAt,omitempty"`
+	Last_login time.Time `json:"lastLogin,omitempty" bson:"lastLogin,omitempty"`
 }
 
 func (t *TimeStamp) Created() {
 	t.Created_at = time.Now()
-	t.Updated_at = time.Now()
-	t.Last_login = time.Now()
 }
 
 func (t *TimeStamp) Updated() {

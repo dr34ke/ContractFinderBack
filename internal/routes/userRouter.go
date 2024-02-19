@@ -11,5 +11,5 @@ func UserRoutes(incomingRoutes *gin.Engine) {
 	incomingRoutes.Use(middleware.Authenticate())
 	incomingRoutes.POST("user/update-profile", controller.UpdateUserProfile())
 	incomingRoutes.POST("user/update-preference", controller.UpdateUserPreference())
-	incomingRoutes.GET("user/test", controller.GetUser())
+	incomingRoutes.GET("user/get-profile/:id", controller.GetUserProfile())
 }

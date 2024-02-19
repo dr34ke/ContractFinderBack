@@ -5,4 +5,5 @@ type UserPreference struct {
 	IsEmailPublic bool    `bson:"isEmailPublic" json:"isEmailPublic"`
 	UserType      string  `bson:"userType" json:"userType"`
 	WorkDistance  float32 `bson:"workDistance" json:"workDistance"`
+	TimeStamp     TimeStamp
 }
