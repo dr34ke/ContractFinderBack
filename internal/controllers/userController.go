@@ -87,22 +87,22 @@ func Login() gin.HandlerFunc {
 		var user models.User
 		var foundUser models.User
 		if err := c.BindJSON(&user); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 		err := userCollection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&foundUser)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Nie znaleziono użytkownika"})
+			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika")
 			return
 		}
 		isPasswordCorrect := foundUser.CheckPasswordHash(user.Password)
 		if !isPasswordCorrect {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Błędne hasło"})
+			c.JSON(http.StatusBadRequest, "Błędne hasło")
 			return
 		}
 		token, refreshToken, _ := helper.GenerateAllTokens(foundUser)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
 		foundUser.Token = token
@@ -111,7 +111,7 @@ func Login() gin.HandlerFunc {
 		err = foundUser.UpdateTokens(ctx)
 
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Server Error"})
+			c.JSON(http.StatusBadRequest, "Server Error")
 			return
 		}
 
@@ -129,19 +129,27 @@ func GetUserProfile() gin.HandlerFunc {
 		var foundUser models.User
 		err := userCollection.FindOne(ctx, bson.M{"_id": id}).Decode(&foundUser)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Nie znaleziono użytkownika"})
+			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika")
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"ok": foundUser.UserProfile})
+		c.JSON(http.StatusOK, foundUser.UserProfile)
 	}
 }
 func GetUserPreference() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		_, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		id, _ := c.Get("uuid")
-		c.JSON(http.StatusOK, gin.H{"ok": id})
+		id := c.Param("id")
+
+		var foundUser models.User
+		err := userCollection.FindOne(ctx, bson.M{"_id": id}).Decode(&foundUser)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika")
+			return
+		}
+
+		c.JSON(http.StatusOK, foundUser.UserPreference)
 	}
 }
 
@@ -153,7 +161,7 @@ func UpdateUserProfile() gin.HandlerFunc {
 
 		var userProfile models.UserProfile
 		if err := c.BindJSON(&userProfile); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 		userProfile.TimeStamp.Updated()
@@ -167,11 +175,11 @@ func UpdateUserProfile() gin.HandlerFunc {
 		response, err := userCollection.UpdateOne(ctx, filter, update)
 
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"response": response})
+		c.JSON(http.StatusOK, response)
 	}
 }
 
@@ -183,7 +191,7 @@ func UpdateUserPreference() gin.HandlerFunc {
 
 		var userPreference models.UserPreference
 		if err := c.BindJSON(&userPreference); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
@@ -196,10 +204,10 @@ func UpdateUserPreference() gin.HandlerFunc {
 		response, err := userCollection.UpdateOne(ctx, filter, update)
 
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"response": response})
+		c.JSON(http.StatusOK, response)
 	}
 }
