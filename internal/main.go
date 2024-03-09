@@ -13,7 +13,9 @@ func main() {
 	r.Use(cors.Default())
 
 	routes.AuthRoutes(r)
+
 	routes.UserRoutes(r)
+	routes.OfferRoutes(r)
 
 	r.Run(":8080")
 }
