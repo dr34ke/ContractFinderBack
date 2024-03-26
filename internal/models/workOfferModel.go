@@ -2,6 +2,7 @@ package models
 
 type WorkOffer struct {
 	Id              string    `bson:"_id" json:"id"`
+	UserId          string    `bson:"userId" json:"userId"`
 	CategoryId      string    `bson:"categoryId" json:"categoryId"`
 	Title           string    `bson:"title" json:"title"`
 	Description     string    `bson:"description" json:"description"`

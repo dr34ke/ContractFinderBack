@@ -211,3 +211,18 @@ func UpdateUserPreference() gin.HandlerFunc {
 		c.JSON(http.StatusOK, response)
 	}
 }
+func GetUserPublicProfile() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		id := c.Param("id")
+
+		var foundUser models.User
+		err := userCollection.FindOne(ctx, bson.M{"_id": id}).Decode(&foundUser)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika")
+			return
+		}
+		c.JSON(http.StatusOK, foundUser.ReturnUserDTO())
+	}
+}
