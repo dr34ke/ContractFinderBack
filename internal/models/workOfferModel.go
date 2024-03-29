@@ -12,5 +12,6 @@ type WorkOffer struct {
 	IsFromWorker    bool      `bson:"isFromWorker" json:"isFromWorker"`
 	OnSite          bool      `bson:"onSite" json:"onSite"`
 	Coordinates     []float64 `bson:"coordinates" json:"coordinates"`
+	DistanceInKm    float64   `bson:"distanceInKm" json:"distanceInKm"`
 	TimeStamp       TimeStamp `bson:"timeStamp" json:"timeStamp"`
 }

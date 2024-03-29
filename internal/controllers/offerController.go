@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -23,19 +25,39 @@ func GetCategories() gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
-		matchStage := bson.D{{"$match", bson.D{}}}
+		longitude, _ := strconv.ParseFloat(c.Query("longitude"), 64)
+		latitude, _ := strconv.ParseFloat(c.Query("latitude"), 64)
+		distance, _ := strconv.ParseFloat(c.Query("distance"), 64)
 
-		lookupStage := bson.D{{"$lookup", bson.D{
-			{"from", "WorkOffers"},
-			{"localField", "_id"},
-			{"foreignField", "categoryId"},
-			{"as", "offers"},
-		}}}
+		distance = distance / 6378.1
 
-		projectStage := bson.D{{"$project", bson.D{
-			{"_id", 1},
-			{"name", 1},
-			{"offersCount", bson.D{{"$size", "$offers"}}},
+		matchStage := bson.D{{Key: "$match", Value: bson.D{}}}
+
+		lookupStage := bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "WorkOffers"},
+				{Key: "localField", Value: "_id"},
+				{Key: "pipeline", Value: bson.A{
+					bson.M{
+						"$match": bson.D{
+							{Key: "$or", Value: bson.A{
+								bson.M{
+									"coordinates": bson.D{
+										{Key: "$geoWithin", Value: bson.D{
+											{Key: "$centerSphere", Value: bson.A{
+												bson.A{latitude, longitude},
+												distance,
+											}}}}}},
+								bson.M{"onSite": false},
+							}}}}}},
+				{Key: "foreignField", Value: "categoryId"},
+				{Key: "as", Value: "offers"},
+			}}}
+
+		projectStage := bson.D{{Key: "$project", Value: bson.D{
+			{Key: "_id", Value: 1},
+			{Key: "name", Value: 1},
+			{Key: "offersCount", Value: bson.M{"$size": "$offers"}},
 		}}}
 
 		// Aggregate pipeline
@@ -43,7 +65,7 @@ func GetCategories() gin.HandlerFunc {
 
 		cur, err := categoriesCollection.Aggregate(context.Background(), pipeline)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, "Nie znaleziono kategorii")
+			c.JSON(http.StatusBadRequest, "Nie znaleziono kategorii"+err.Error())
 			return
 		}
 
@@ -62,11 +84,71 @@ func GetCategoryOffers() gin.HandlerFunc {
 		defer cancel()
 		id := c.Param("id")
 
-		cur, err := offersCollection.Find(ctx, bson.D{{"categoryId", id}})
+		longitude, _ := strconv.ParseFloat(c.Query("longitude"), 64)
+		latitude, _ := strconv.ParseFloat(c.Query("latitude"), 64)
+		distance, _ := strconv.ParseFloat(c.Query("distance"), 64)
+
+		pipeline := mongo.Pipeline{
+			bson.D{{Key: "$geoNear", Value: bson.D{
+				{Key: "near", Value: bson.D{
+					{Key: "type", Value: "Point"},
+					{Key: "coordinates", Value: bson.A{latitude, longitude}},
+				}},
+				{Key: "distanceField", Value: "distance"},
+				{Key: "maxDistance", Value: distance * 1000},
+				{Key: "spherical", Value: true},
+			}}},
+			bson.D{{Key: "$match", Value: bson.D{
+				{Key: "categoryId", Value: bson.M{"$eq": id}},
+			}}},
+			bson.D{{Key: "$project", Value: bson.D{
+				{Key: "_id", Value: 1},
+				{Key: "userId", Value: 1},
+				{Key: "categoryId", Value: 1},
+				{Key: "title", Value: 1},
+				{Key: "description", Value: 1},
+				{Key: "sugestedSalary", Value: 1},
+				{Key: "isSalaryPerHour", Value: 1},
+				{Key: "isRepetetive", Value: 1},
+				{Key: "isFromWorker", Value: 1},
+				{Key: "coordinates", Value: 1},
+				{Key: "onSite", Value: 1},
+				{Key: "distanceInKm", Value: bson.M{"$divide": bson.A{"$distance", 1000}}},
+			}}},
+			bson.D{{Key: "$unionWith", Value: bson.D{
+				{Key: "coll", Value: "WorkOffers"},
+				{Key: "pipeline", Value: bson.A{
+					bson.M{"$match": bson.M{
+						"$and": bson.A{
+							bson.M{"categoryId": bson.M{"$eq": id}},
+							bson.M{"onSite": bson.M{"$eq": false}},
+						},
+					}},
+					bson.D{{Key: "$project", Value: bson.D{
+						{Key: "_id", Value: 1},
+						{Key: "userId", Value: 1},
+						{Key: "categoryId", Value: 1},
+						{Key: "title", Value: 1},
+						{Key: "description", Value: 1},
+						{Key: "sugestedSalary", Value: 1},
+						{Key: "isSalaryPerHour", Value: 1},
+						{Key: "isRepetetive", Value: 1},
+						{Key: "isFromWorker", Value: 1},
+						{Key: "coordinates", Value: 1},
+						{Key: "onSite", Value: 1},
+					}}},
+				}},
+			}}},
+			bson.D{{Key: "$sort", Value: bson.D{
+				{Key: "distanceInKm", Value: 1},
+			}}},
+		}
+
+		// Run the aggregation pipeline
+		cur, err := offersCollection.Aggregate(context.Background(), pipeline)
 
 		if err != nil {
-			log.Print(err)
-			c.JSON(http.StatusBadRequest, "Nie znaleziono ofert")
+			c.JSON(http.StatusBadRequest, "Nie znaleziono ofert"+err.Error())
 			return
 		}
 
