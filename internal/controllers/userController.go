@@ -5,6 +5,7 @@ import (
 	"contractfinder/internal/database"
 	helper "contractfinder/internal/helpers"
 	"contractfinder/internal/models"
+	"log"
 
 	"net/http"
 	"time"
@@ -18,6 +19,8 @@ import (
 )
 
 var userCollection *mongo.Collection = database.OpenConnection(database.DBinstance(), "user")
+var userRatingCollection *mongo.Collection = database.OpenConnection(database.DBinstance(), "UserRatings")
+
 var validate = validator.New()
 
 func SingUp() gin.HandlerFunc {
@@ -217,12 +220,67 @@ func GetUserPublicProfile() gin.HandlerFunc {
 		defer cancel()
 		id := c.Param("id")
 
-		var foundUser models.User
-		err := userCollection.FindOne(ctx, bson.M{"_id": id}).Decode(&foundUser)
+		pipeline := mongo.Pipeline{
+			bson.D{{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "UserRatings"},
+				{Key: "localField", Value: "_id"},
+				{Key: "foreignField", Value: "idEvaluatedUser"},
+				{Key: "as", Value: "ratingModel"},
+			}}},
+			bson.D{{Key: "$match", Value: bson.D{
+				{Key: "_id", Value: bson.M{"$eq": id}},
+			}}},
+			bson.D{{Key: "$project", Value: bson.D{
+				{Key: "_id", Value: 1},
+				{Key: "firstName", Value: 1},
+				{Key: "lastName", Value: 1},
+				{Key: "email", Value: 1},
+				{Key: "phone", Value: 1},
+				{Key: "userProfile", Value: 1},
+				{Key: "userPreference", Value: 1},
+				{Key: "rating", Value: bson.M{"$avg": "$ratingModel.rating"}},
+			}}},
+		}
+
+		// Run the aggregation pipeline
+		cur, err := userCollection.Aggregate(context.Background(), pipeline)
+
+		if err != nil {
+			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika"+err.Error())
+			return
+		}
+
+		var results []models.User
+		if err = cur.All(ctx, &results); err != nil {
+			log.Print(err)
+		}
+
 		if err != nil {
 			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika")
 			return
 		}
-		c.JSON(http.StatusOK, foundUser.ReturnUserDTO())
+		c.JSON(http.StatusOK, results[0].ReturnUserDTO())
+	}
+}
+
+func GetUserRatings() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		id := c.Param("id")
+
+		cursor, err := userRatingCollection.Find(ctx, bson.M{"idEvaluatedUser": id})
+		if err != nil {
+			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika")
+			return
+		}
+		defer cursor.Close(ctx)
+
+		var userRatings []models.UserRating
+		if err = cursor.All(ctx, &userRatings); err != nil {
+			log.Print(err)
+		}
+
+		c.JSON(http.StatusOK, userRatings)
 	}
 }

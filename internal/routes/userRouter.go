@@ -14,4 +14,5 @@ func UserRoutes(incomingRoutes *gin.Engine) {
 	incomingRoutes.GET("user/get-profile/:id", controller.GetUserProfile())
 	incomingRoutes.GET("user/get-preference/:id", controller.GetUserPreference())
 	incomingRoutes.GET("user/get-public-profile/:id", controller.GetUserPublicProfile())
+	incomingRoutes.GET("user/user-ratings/:id", controller.GetUserRatings())
 }

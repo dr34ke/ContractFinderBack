@@ -11,4 +11,5 @@ func OfferRoutes(incomingRoutes *gin.Engine) {
 	incomingRoutes.Use(middleware.Authenticate())
 	incomingRoutes.GET("categories", controller.GetCategories())
 	incomingRoutes.GET("category-offers/:id", controller.GetCategoryOffers())
+	incomingRoutes.GET("offer/:id", controller.GetOffer())
 }

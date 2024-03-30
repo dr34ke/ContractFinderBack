@@ -24,6 +24,7 @@ type User struct {
 	TimeStamp      TimeStamp       `bson:"timeStamp" json:"timeStamp"`
 	UserProfile    *UserProfile    `bson:"userProfile" json:"userProfile"`
 	UserPreference *UserPreference `bson:"userPreference" json:"userPreference"`
+	Rating         *float64        `bson:"rating" json:"rating"`
 }
 
 type SimplifiedUser struct {
@@ -74,8 +75,10 @@ func (u User) ReturnSimplified() SimplifiedUser {
 func (u User) ReturnUserDTO() dto.UserProfileDTO {
 
 	dto := dto.UserProfileDTO{
+		Id:         u.Id,
 		First_name: u.FirstName,
 		Last_name:  u.LastName,
+		Rating:     u.Rating,
 	}
 	if u.UserPreference != nil && u.UserPreference.IsEmailPublic {
 		dto.Email = &u.Email
