@@ -1,33 +1,22 @@
 package controllers
 
 import (
-	"context"
 	"contractfinder/internal/database"
 	helper "contractfinder/internal/helpers"
 	"contractfinder/internal/models"
 	"log"
-
 	"net/http"
-	"time"
 
 	"github.com/beevik/guid"
 	"github.com/gin-gonic/gin"
-
 	"github.com/go-playground/validator/v10"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var userCollection *mongo.Collection = database.OpenConnection(database.DBinstance(), "user")
-var userRatingCollection *mongo.Collection = database.OpenConnection(database.DBinstance(), "UserRatings")
-
-var validate = validator.New()
-
 func SingUp() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		var user models.User
-		defer cancel()
 
 		if err := c.BindJSON(&user); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -47,13 +36,13 @@ func SingUp() gin.HandlerFunc {
 			return
 		}
 
-		countEmail, err := userCollection.CountDocuments(ctx, bson.M{"email": user.Email})
+		countEmail, err := database.Count("user", bson.M{"email": user.Email})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		countPhone, err := userCollection.CountDocuments(ctx, bson.M{"phone": user.Phone})
+		countPhone, err := database.Count("user", bson.M{"phone": user.Phone})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -74,44 +63,43 @@ func SingUp() gin.HandlerFunc {
 		user.RefreshToken = refresh_token
 		user.HashPassword()
 
-		result, err := userCollection.InsertOne(ctx, user)
+		result, err := database.Insert("user", user)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
 		c.JSON(http.StatusCreated, result)
 	}
 }
 
 func Login() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
 		var user models.User
-		var foundUser models.User
 		if err := c.BindJSON(&user); err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
-		err := userCollection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&foundUser)
+
+		foundUser, err := database.GetOne[models.User](database.DBinstance(), "user", bson.M{"email": user.Email})
 		if err != nil {
 			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika")
+			log.Print(err)
 			return
 		}
+
 		isPasswordCorrect := foundUser.CheckPasswordHash(user.Password)
 		if !isPasswordCorrect {
 			c.JSON(http.StatusBadRequest, "Błędne hasło")
 			return
 		}
-		token, refreshToken, _ := helper.GenerateAllTokens(foundUser)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, err.Error())
-			return
-		}
+
+		token, refreshToken, _ := helper.GenerateAllTokens(*foundUser)
+
 		foundUser.Token = token
 		foundUser.RefreshToken = refreshToken
 		foundUser.TimeStamp.Login()
-		err = foundUser.UpdateTokens(ctx)
+		err = foundUser.UpdateTokens()
 
 		if err != nil {
 			c.JSON(http.StatusBadRequest, "Server Error")
@@ -125,14 +113,12 @@ func Login() gin.HandlerFunc {
 
 func GetUserProfile() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
 		id := c.Param("id")
 
-		var foundUser models.User
-		err := userCollection.FindOne(ctx, bson.M{"_id": id}).Decode(&foundUser)
+		foundUser, err := database.GetOne[models.User](database.DBinstance(), "user", bson.M{"_id": id})
 		if err != nil {
 			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika")
+			log.Print(err)
 			return
 		}
 
@@ -141,14 +127,12 @@ func GetUserProfile() gin.HandlerFunc {
 }
 func GetUserPreference() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
 		id := c.Param("id")
 
-		var foundUser models.User
-		err := userCollection.FindOne(ctx, bson.M{"_id": id}).Decode(&foundUser)
+		foundUser, err := database.GetOne[models.User](database.DBinstance(), "user", bson.M{"_id": id})
 		if err != nil {
 			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika")
+			log.Print(err)
 			return
 		}
 
@@ -158,8 +142,6 @@ func GetUserPreference() gin.HandlerFunc {
 
 func UpdateUserProfile() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
 		id, _ := c.Get("uuid")
 
 		var userProfile models.UserProfile
@@ -175,8 +157,8 @@ func UpdateUserProfile() gin.HandlerFunc {
 				"userProfile": userProfile,
 			},
 		}
-		response, err := userCollection.UpdateOne(ctx, filter, update)
 
+		response, err := database.Update("user", filter, update)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
@@ -188,8 +170,6 @@ func UpdateUserProfile() gin.HandlerFunc {
 
 func UpdateUserPreference() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
 		id, _ := c.Get("uuid")
 
 		var userPreference models.UserPreference
@@ -204,8 +184,8 @@ func UpdateUserPreference() gin.HandlerFunc {
 				"userPreference": userPreference,
 			},
 		}
-		response, err := userCollection.UpdateOne(ctx, filter, update)
 
+		response, err := database.Update("user", filter, update)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
@@ -216,8 +196,6 @@ func UpdateUserPreference() gin.HandlerFunc {
 }
 func GetUserPublicProfile() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
 		id := c.Param("id")
 
 		pipeline := mongo.Pipeline{
@@ -242,45 +220,29 @@ func GetUserPublicProfile() gin.HandlerFunc {
 			}}},
 		}
 
-		// Run the aggregation pipeline
-		cur, err := userCollection.Aggregate(context.Background(), pipeline)
+		results, err := database.Aggregate[models.User]("user", pipeline)
 
 		if err != nil {
-			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika"+err.Error())
-			return
-		}
-
-		var results []models.User
-		if err = cur.All(ctx, &results); err != nil {
 			log.Print(err)
-		}
-
-		if err != nil {
-			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika")
+			c.JSON(http.StatusBadRequest, "Nie znaleziono ofert"+err.Error())
 			return
 		}
+
 		c.JSON(http.StatusOK, results[0].ReturnUserDTO())
 	}
 }
 
 func GetUserRatings() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
 		id := c.Param("id")
 
-		cursor, err := userRatingCollection.Find(ctx, bson.M{"idEvaluatedUser": id})
+		userRatings, err := database.GetMany[models.UserRating]("UserRatings", bson.M{"idEvaluatedUser": id})
+
 		if err != nil {
-			c.JSON(http.StatusBadRequest, "Nie znaleziono użytkownika")
+			log.Print(err)
+			c.JSON(http.StatusBadRequest, "")
 			return
 		}
-		defer cursor.Close(ctx)
-
-		var userRatings []models.UserRating
-		if err = cursor.All(ctx, &userRatings); err != nil {
-			log.Print(err)
-		}
-
 		c.JSON(http.StatusOK, userRatings)
 	}
 }

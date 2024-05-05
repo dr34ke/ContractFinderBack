@@ -1,16 +1,12 @@
 package models
 
 import (
-	"context"
 	"contractfinder/internal/database"
 	"contractfinder/internal/dto"
 
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 )
-
-var userCollection *mongo.Collection = database.OpenConnection(database.DBinstance(), "user")
 
 type User struct {
 	Id             string          `bson:"_id" json:"id"`
@@ -48,7 +44,7 @@ func (u User) CheckPasswordHash(password string) bool {
 	return err == nil
 }
 
-func (u *User) UpdateTokens(ctx context.Context) error {
+func (u *User) UpdateTokens() error {
 	filter := bson.M{"_id": u.Id}
 	update := bson.M{
 		"$set": bson.M{
@@ -57,7 +53,7 @@ func (u *User) UpdateTokens(ctx context.Context) error {
 			"timeStamp.last_login": u.TimeStamp.Last_login,
 		},
 	}
-	_, err := userCollection.UpdateOne(ctx, filter, update)
+	_, err := database.Update("user", filter, update)
 	return err
 }
 

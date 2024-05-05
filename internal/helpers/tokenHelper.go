@@ -1,16 +1,13 @@
 package helper
 
 import (
-	//"contractfinder/internal/database"
 	"contractfinder/internal/models"
 	"os"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	//"go.mongodb.org/mongo-driver/mongo"
 )
 
-// var userCollection *mongo.Collection = database.OpenConnection(database.DBinstance(), "user")
 var SECRET string = os.Getenv("JWT_KEY")
 
 func GenerateAllTokens(user models.User) (singedToken string, signedRefreshToken string, err error) {

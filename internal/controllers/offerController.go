@@ -5,26 +5,36 @@ import (
 	"contractfinder/internal/database"
 	"contractfinder/internal/models"
 	"log"
-
 	"net/http"
+	"strconv"
 	"time"
 
-	"strconv"
-
+	"github.com/beevik/guid"
 	"github.com/gin-gonic/gin"
-
+	"github.com/go-playground/validator/v10"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var categoriesCollection *mongo.Collection = database.OpenConnection(database.DBinstance(), "WorkCategory")
-var offersCollection *mongo.Collection = database.OpenConnection(database.DBinstance(), "WorkOffers")
+var validate = validator.New()
+
+func GetCategoriesNames() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		_, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+
+		results, err := database.GetMany[models.WorkCategory]("WorkCategory", bson.M{})
+
+		if err != nil {
+			c.JSON(http.StatusBadRequest, "Nie znaleziono kategorii"+err.Error())
+			return
+		}
+		c.JSON(http.StatusOK, results)
+	}
+}
 
 func GetCategories() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-
 		longitude, _ := strconv.ParseFloat(c.Query("longitude"), 64)
 		latitude, _ := strconv.ParseFloat(c.Query("latitude"), 64)
 		distance, _ := strconv.ParseFloat(c.Query("distance"), 64)
@@ -63,15 +73,12 @@ func GetCategories() gin.HandlerFunc {
 		// Aggregate pipeline
 		pipeline := mongo.Pipeline{matchStage, lookupStage, projectStage}
 
-		cur, err := categoriesCollection.Aggregate(context.Background(), pipeline)
+		results, err := database.Aggregate[models.WorkCategory]("WorkCategory", pipeline)
+
 		if err != nil {
+			log.Print(err)
 			c.JSON(http.StatusBadRequest, "Nie znaleziono kategorii"+err.Error())
 			return
-		}
-
-		var results []models.WorkCategory
-		if err = cur.All(ctx, &results); err != nil {
-			log.Print(err)
 		}
 
 		c.JSON(http.StatusOK, results)
@@ -80,8 +87,6 @@ func GetCategories() gin.HandlerFunc {
 
 func GetCategoryOffers() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
 		id := c.Param("id")
 
 		longitude, _ := strconv.ParseFloat(c.Query("longitude"), 64)
@@ -144,25 +149,20 @@ func GetCategoryOffers() gin.HandlerFunc {
 			}}},
 		}
 
-		// Run the aggregation pipeline
-		cur, err := offersCollection.Aggregate(context.Background(), pipeline)
+		results, err := database.Aggregate[models.WorkOffer]("WorkOffers", pipeline)
 
 		if err != nil {
+			log.Print(err)
 			c.JSON(http.StatusBadRequest, "Nie znaleziono ofert"+err.Error())
 			return
 		}
 
-		var results []models.WorkOffer
-		if err = cur.All(ctx, &results); err != nil {
-			log.Print(err)
-		}
 		c.JSON(http.StatusOK, results)
 	}
 }
+
 func GetOffer() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
 		id := c.Param("id")
 
 		longitude, _ := strconv.ParseFloat(c.Query("longitude"), 64)
@@ -210,6 +210,12 @@ func GetOffer() gin.HandlerFunc {
 							bson.M{"onSite": bson.M{"$eq": false}},
 						},
 					}},
+					bson.D{{Key: "$lookup", Value: bson.D{
+						{Key: "from", Value: "UserApplications"},
+						{Key: "localField", Value: "_id"},
+						{Key: "foreignField", Value: "offerId"},
+						{Key: "as", Value: "usersApplications"},
+					}}},
 					bson.D{{Key: "$project", Value: bson.D{
 						{Key: "_id", Value: 1},
 						{Key: "userId", Value: 1},
@@ -222,23 +228,82 @@ func GetOffer() gin.HandlerFunc {
 						{Key: "isFromWorker", Value: 1},
 						{Key: "coordinates", Value: 1},
 						{Key: "onSite", Value: 1},
+						{Key: "usersApplications", Value: 1},
 					}}},
 				}},
 			}}},
 		}
-
-		// Run the aggregation pipeline
-		cur, err := offersCollection.Aggregate(context.Background(), pipeline)
+		results, err := database.Aggregate[models.WorkOffer]("WorkOffers", pipeline)
 
 		if err != nil {
-			c.JSON(http.StatusBadRequest, "Nie znaleziono ofert"+err.Error())
+			log.Print(err)
+			c.JSON(http.StatusBadRequest, "Nie znaleziono oferty"+err.Error())
+			return
+		}
+		log.Print(pipeline)
+
+		c.JSON(http.StatusOK, results[0])
+
+	}
+}
+
+func UserApplication() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var application models.UserApplication
+
+		if err := c.BindJSON(&application); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		var results []models.WorkOffer
-		if err = cur.All(ctx, &results); err != nil {
-			log.Print(err)
+		err := validate.Struct(application)
+		if err != nil {
+			validationErrors := err.(validator.ValidationErrors)
+			if validationErrors != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": validationErrors})
+				return
+			}
 		}
-		c.JSON(http.StatusOK, results[0])
+
+		application.Id = guid.New().String()
+		result, err := database.Insert("UserApplications", application)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusCreated, result)
+	}
+}
+
+func AddOffer() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var offer models.WorkOffer
+
+		if err := c.BindJSON(&offer); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		err := validate.Struct(offer)
+		if err != nil {
+			validationErrors := err.(validator.ValidationErrors)
+			if validationErrors != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": validationErrors.Error()})
+				return
+			}
+		}
+
+		offer.Id = guid.New().String()
+		offer.TimeStamp.Created()
+		result, err := database.Insert("WorkOffers", offer)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusCreated, result)
 	}
 }
