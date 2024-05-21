@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"time"
 
+	helper "contractfinder/internal/helpers"
+
 	"github.com/beevik/guid"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -271,6 +273,24 @@ func UserApplication() gin.HandlerFunc {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
+		}
+
+		offer, err := database.GetOne[models.WorkOffer](database.DBinstance(), "user", bson.M{"_id": application.OfferId})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		
+		user, err := database.GetOne[models.User](database.DBinstance(), "user", bson.M{"_id": offer.UserId})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		token := user.FirebaseToken
+
+		if err := helper.SendPushNotification(token, "Nowa aplikacja na twoją ofertę", "Ktoś dodał aplikację do oferty którą zamieściłeś. Sprawdź!"); err != nil {
+			log.Fatalf("Error sending push notification: %v", err)
 		}
 
 		c.JSON(http.StatusCreated, result)

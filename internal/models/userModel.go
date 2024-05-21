@@ -16,6 +16,7 @@ type User struct {
 	Email          string          `bson:"email" json:"email" validate:"required,min=5,max=100"`
 	Phone          string          `bson:"phone" json:"phone" validate:"required,min=9,max=12"`
 	Token          string          `bson:"token" json:"token"`
+	FirebaseToken  string          `bson:"firebaseToken" json:"firebaseToken"`
 	RefreshToken   string          `bson:"refreshToken" json:"refreshToken"`
 	TimeStamp      TimeStamp       `bson:"timeStamp" json:"timeStamp"`
 	UserProfile    *UserProfile    `bson:"userProfile" json:"userProfile"`
